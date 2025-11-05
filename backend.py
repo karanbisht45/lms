@@ -14,6 +14,7 @@ for d in UPLOAD_DIRS:
 
 # ---------------- SAFE MIGRATION HELPERS -----------------
 def try_alter(table, sql):
+    """Executes ALTER TABLE safely (ignores existing columns)."""
     try:
         c.execute(sql)
         conn.commit()
@@ -22,6 +23,7 @@ def try_alter(table, sql):
 
 # ---------------- CREATE / MIGRATE TABLES -----------------
 def create_tables_and_migrate():
+    # Users table (base, handled mainly by auth.py)
     c.execute('''CREATE TABLE IF NOT EXISTS users (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     username TEXT UNIQUE,
@@ -29,6 +31,7 @@ def create_tables_and_migrate():
                     role TEXT CHECK(role IN ('Student','Teacher'))
                 )''')
 
+    # Courses
     c.execute('''CREATE TABLE IF NOT EXISTS courses (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     name TEXT,
@@ -36,6 +39,7 @@ def create_tables_and_migrate():
                     FOREIGN KEY (teacher_id) REFERENCES users(id)
                 )''')
 
+    # Enrollments
     c.execute('''CREATE TABLE IF NOT EXISTS enrollments (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     student_id INTEGER,
@@ -44,7 +48,7 @@ def create_tables_and_migrate():
                     FOREIGN KEY (course_id) REFERENCES courses(id)
                 )''')
 
-    # Assignments (with PDF path)
+    # Assignments (PDF support)
     c.execute('''CREATE TABLE IF NOT EXISTS assignments (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     course_id INTEGER,
@@ -54,6 +58,7 @@ def create_tables_and_migrate():
                 )''')
     try_alter("assignments", "ALTER TABLE assignments ADD COLUMN file_path TEXT")
 
+    # Submissions (student assignment answers)
     c.execute('''CREATE TABLE IF NOT EXISTS submissions (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     student_id INTEGER,
@@ -66,7 +71,7 @@ def create_tables_and_migrate():
                     FOREIGN KEY (assignment_id) REFERENCES assignments(id)
                 )''')
 
-    # Notes (PDF support)
+    # Notes (PDF)
     c.execute('''CREATE TABLE IF NOT EXISTS notes (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     course_id INTEGER,
@@ -75,7 +80,7 @@ def create_tables_and_migrate():
                 )''')
     try_alter("notes", "ALTER TABLE notes ADD COLUMN file_path TEXT")
 
-    # Exams (PDF support)
+    # Exams (PDF)
     c.execute('''CREATE TABLE IF NOT EXISTS exams (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     course_id INTEGER,
@@ -85,7 +90,7 @@ def create_tables_and_migrate():
                 )''')
     try_alter("exams", "ALTER TABLE exams ADD COLUMN file_path TEXT")
 
-    # Exam submissions
+    # Exam Submissions
     c.execute('''CREATE TABLE IF NOT EXISTS exam_submissions (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     student_id INTEGER,
@@ -98,7 +103,7 @@ def create_tables_and_migrate():
                     FOREIGN KEY (exam_id) REFERENCES exams(id)
                 )''')
 
-    # Points/leaderboard
+    # Points / Leaderboard
     c.execute('''CREATE TABLE IF NOT EXISTS points (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     student_id INTEGER UNIQUE,
@@ -108,10 +113,13 @@ def create_tables_and_migrate():
 
     conn.commit()
 
+
+# Run migration at import
 create_tables_and_migrate()
 
 # ---------------- USER FUNCTIONS -----------------
 def signup(username, password, role):
+    """Register a new user."""
     try:
         c.execute("INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
                   (username, password, role))
@@ -120,7 +128,9 @@ def signup(username, password, role):
     except sqlite3.IntegrityError:
         return False
 
+
 def login(username, password, role):
+    """Login user by username, password, and role."""
     c.execute("SELECT id FROM users WHERE username=? AND password=? AND role=?",
               (username, password, role))
     return c.fetchone()
@@ -130,9 +140,11 @@ def add_course(name, teacher_id):
     c.execute("INSERT INTO courses (name, teacher_id) VALUES (?, ?)", (name, teacher_id))
     conn.commit()
 
+
 def get_courses():
     c.execute("SELECT id, name, teacher_id FROM courses")
     return c.fetchall()
+
 
 def get_enrolled_courses(student_id):
     c.execute('''SELECT c.id, c.name
@@ -141,7 +153,9 @@ def get_enrolled_courses(student_id):
                  WHERE e.student_id = ?''', (student_id,))
     return c.fetchall()
 
+
 def enroll_course(student_id, course_id):
+    """Enroll a student in a course if not already enrolled."""
     c.execute("SELECT id FROM enrollments WHERE student_id=? AND course_id=?", (student_id, course_id))
     if c.fetchone():
         return False
@@ -149,11 +163,14 @@ def enroll_course(student_id, course_id):
     conn.commit()
     return True
 
+
 def count_enrolled_students(course_id):
     c.execute("SELECT COUNT(*) FROM enrollments WHERE course_id=?", (course_id,))
     return c.fetchone()[0]
 
+
 def get_enrolled_students(course_id):
+    """Return all students enrolled in a given course."""
     c.execute("""
         SELECT u.id, u.username
         FROM users u
@@ -164,6 +181,7 @@ def get_enrolled_students(course_id):
 
 # ---------------- ASSIGNMENT FUNCTIONS (PDF) -----------------
 def add_assignment(course_id, title, uploaded_file):
+    """Add a new PDF assignment."""
     file_path = f"uploads/assignments/{title}_{datetime.now().strftime('%Y%m%d%H%M%S')}.pdf"
     with open(file_path, "wb") as f:
         f.write(uploaded_file.getbuffer())
@@ -171,17 +189,20 @@ def add_assignment(course_id, title, uploaded_file):
               (course_id, title, file_path))
     conn.commit()
 
+
 def get_assignments(course_id):
     c.execute("SELECT id, title, file_path FROM assignments WHERE course_id=?", (course_id,))
     return c.fetchall()
 
 # ---------------- NOTES FUNCTIONS (PDF) -----------------
 def upload_note(course_id, uploaded_file):
+    """Upload PDF notes for a course."""
     file_path = f"uploads/notes/note_{datetime.now().strftime('%Y%m%d%H%M%S')}.pdf"
     with open(file_path, "wb") as f:
         f.write(uploaded_file.getbuffer())
     c.execute("INSERT INTO notes (course_id, file_path) VALUES (?, ?)", (course_id, file_path))
     conn.commit()
+
 
 def get_notes(course_id):
     c.execute("SELECT id, file_path FROM notes WHERE course_id=?", (course_id,))
@@ -189,6 +210,7 @@ def get_notes(course_id):
 
 # ---------------- EXAM FUNCTIONS (PDF) -----------------
 def create_exam(course_id, title, uploaded_file):
+    """Create and upload a PDF-based exam."""
     file_path = f"uploads/exams/{title}_{datetime.now().strftime('%Y%m%d%H%M%S')}.pdf"
     with open(file_path, "wb") as f:
         f.write(uploaded_file.getbuffer())
@@ -196,12 +218,14 @@ def create_exam(course_id, title, uploaded_file):
               (course_id, title, file_path))
     conn.commit()
 
+
 def get_exams(course_id):
     c.execute("SELECT id, title, file_path FROM exams WHERE course_id=?", (course_id,))
     return c.fetchall()
 
 # ---------------- SUBMISSIONS & PERFORMANCE -----------------
 def submit_assignment(student_id, assignment_id, answer):
+    """Submit or update an assignment answer."""
     date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     c.execute("SELECT id FROM submissions WHERE student_id=? AND assignment_id=?", (student_id, assignment_id))
     row = c.fetchone()
@@ -212,9 +236,10 @@ def submit_assignment(student_id, assignment_id, answer):
         c.execute("""INSERT INTO submissions (student_id, assignment_id, answer, submission_date)
                      VALUES (?, ?, ?, ?)""", (student_id, assignment_id, answer, date))
     conn.commit()
-    # TODO: Send email to teacher (Phase 2)
+
 
 def submit_exam(student_id, exam_id, answer):
+    """Submit or update an exam answer."""
     date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     c.execute("SELECT id FROM exam_submissions WHERE student_id=? AND exam_id=?", (student_id, exam_id))
     row = c.fetchone()
@@ -225,7 +250,6 @@ def submit_exam(student_id, exam_id, answer):
         c.execute("""INSERT INTO exam_submissions (student_id, exam_id, answer, submission_date)
                      VALUES (?, ?, ?, ?)""", (student_id, exam_id, answer, date))
     conn.commit()
-    # TODO: Send email notification (Phase 2)
 
 # ---------------- TEACHER ANALYTICS -----------------
 def get_teacher_student_performance(course_id):
@@ -256,3 +280,59 @@ def get_teacher_student_performance(course_id):
             "Exam Titles": exam_titles
         })
     return data
+
+# ---------------- POINTS / LEADERBOARD -----------------
+def add_points(student_id, points):
+    """Add points (create row if missing)."""
+    c.execute("SELECT points FROM points WHERE student_id=?", (student_id,))
+    row = c.fetchone()
+    if row:
+        new_total = row[0] + points
+        c.execute("UPDATE points SET points=? WHERE student_id=?", (new_total, student_id))
+    else:
+        c.execute("INSERT INTO points (student_id, points) VALUES (?, ?)", (student_id, points))
+    conn.commit()
+
+
+def get_user_points(student_id):
+    """Return total points for a specific student."""
+    c.execute("SELECT points FROM points WHERE student_id=?", (student_id,))
+    row = c.fetchone()
+    return row[0] if row else 0
+
+
+def get_leaderboard():
+    """Return leaderboard of all students sorted by points."""
+    c.execute('''
+        SELECT u.username, p.points
+        FROM users u
+        JOIN points p ON u.id = p.student_id
+        ORDER BY p.points DESC
+    ''')
+    return c.fetchall()
+
+# ---------------- ANALYTICS / PROGRESS -----------------
+def get_course_progress(student_id):
+    """
+    Returns list of (course_name, completion_percent).
+    If a course has zero assignments, progress = 0.0.
+    """
+    c.execute('''
+        SELECT
+            c.name,
+            CASE
+                WHEN (SELECT COUNT(*) FROM assignments a WHERE a.course_id = c.id) = 0 THEN 0.0
+                ELSE (CAST(COALESCE(sub.count_submissions,0) AS FLOAT) * 100.0) /
+                     (SELECT COUNT(*) FROM assignments a WHERE a.course_id = c.id)
+            END AS progress
+        FROM courses c
+        JOIN enrollments e ON c.id = e.course_id
+        LEFT JOIN (
+            SELECT a.course_id, COUNT(s.id) AS count_submissions
+            FROM assignments a
+            LEFT JOIN submissions s ON a.id = s.assignment_id AND s.student_id = ?
+            GROUP BY a.course_id
+        ) sub ON sub.course_id = c.id
+        WHERE e.student_id = ?
+    ''', (student_id, student_id))
+    return c.fetchall()

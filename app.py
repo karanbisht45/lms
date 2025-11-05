@@ -2,6 +2,7 @@ import streamlit as st
 import backend as bk
 import pandas as pd
 import os
+import auth
 
 # ---------------- PAGE CONFIG -----------------
 st.set_page_config(page_title="Centralized LMS", page_icon="🎓", layout="wide")
@@ -29,33 +30,37 @@ def save_pdf(uploaded_file, folder):
 def login_form():
     with st.form("login_form"):
         st.subheader("🔐 Login")
-        username = st.text_input("Username")
+        email = st.text_input("Email")
         password = st.text_input("Password", type="password")
         role = st.selectbox("Role", ["Student", "Teacher"])
         submitted = st.form_submit_button("Login")
+
         if submitted:
-            user = bk.login(username, password, role)
+            user = auth.verify_login(email, password, role)
             if user:
                 st.session_state.login = True
                 st.session_state.user_id = user[0]
                 st.session_state.role = role
-                st.toast(f"✅ Welcome {username} ({role})!", icon="🎉")
+                st.toast(f"✅ Welcome {user[1]} ({role})!", icon="🎉")
                 st.rerun()
             else:
-                st.error("❌ Invalid credentials.")
+                st.error("❌ Invalid email or password.")
+
 
 def signup_form():
     with st.form("signup_form"):
         st.subheader("📝 Signup")
-        username = st.text_input("Create Username")
+        username = st.text_input("Username")
+        email = st.text_input("Email")
         password = st.text_input("Create Password", type="password")
         role = st.selectbox("Role", ["Student", "Teacher"])
         submitted = st.form_submit_button("Signup")
+
         if submitted:
-            if bk.signup(username, password, role):
+            if auth.signup_user(username, email, password, role):
                 st.success("✅ Account created successfully! Please login.")
             else:
-                st.error("⚠️ Username already exists.")
+                st.error("⚠️ Username or Email already exists.")
 
 # ---------------- STUDENT DASHBOARD -----------------
 def student_dashboard(uid):
