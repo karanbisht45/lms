@@ -53,6 +53,3 @@ It integrates **students** and **teachers** into one digital ecosystem — enabl
 | **IDE** | VS Code / PyCharm |
 
 ---
-
-## 🗂 Folder Structure
-
