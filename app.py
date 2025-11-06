@@ -313,11 +313,6 @@ def teacher_dashboard(uid):
     else:
         st.warning("Please add a course first.")
 
-    # TODO: Add email notification system in next phase
-
-
-
-
 # ---------------- MAIN -----------------
 if not st.session_state.login:
     choice = st.sidebar.radio("Menu", ["Login", "Signup"])
