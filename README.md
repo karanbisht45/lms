@@ -7,7 +7,6 @@
   <img src="https://img.shields.io/badge/Python-3.10+-yellow?style=for-the-badge&logo=python&logoColor=white"/>
   <img src="https://img.shields.io/badge/Framework-Streamlit-ff4b4b?style=for-the-badge&logo=streamlit&logoColor=white"/>
   <img src="https://img.shields.io/badge/Database-SQLite-blue?style=for-the-badge&logo=sqlite&logoColor=white"/>
-  <img src="https://img.shields.io/badge/Status-Live%20%26%20Working-success?style=for-the-badge"/>
 </p>
 
 ---
